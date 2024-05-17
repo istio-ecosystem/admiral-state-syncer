@@ -4,7 +4,7 @@ package registry
 // and the shard they belong to
 type ClusterStore interface {
 	AddClusterToShard() error
-	AllAllClustersToShard() error
+	AddAllClustersToShard() error
 }
 
 // IdentityStore stores mapping of identity and
