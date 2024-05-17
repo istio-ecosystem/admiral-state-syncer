@@ -12,8 +12,8 @@ import (
 // syncCmd represents the sync command
 var syncCmd = &cobra.Command{
 	Use:   "sync",
-	Short: "Syncs state from kubernetes API Server to a messaging platform",
-	Long:  `Syncs state from kubernetes API Server to a messaging platform`,
+	Short: "Syncs state from kubernetes API Server to a registry platform",
+	Long:  `Syncs state from kubernetes API Server to a registry platform`,
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("sync called")
 	},

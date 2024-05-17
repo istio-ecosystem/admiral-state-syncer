@@ -12,8 +12,8 @@ import (
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "admiral-state-syncer",
-	Short: "Syncs state from kubernetes API Server to a messaging platform",
-	Long:  `Syncs state from kubernetes API Server to a messaging platform`,
+	Short: "Syncs state from kubernetes API Server to a registry platform",
+	Long:  `Syncs state from kubernetes API Server to a registry platform`,
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.

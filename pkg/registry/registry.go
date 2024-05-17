@@ -1,4 +1,4 @@
-package messaging
+package registry
 
 // ClusterStore stores mapping of clusters
 // and the shard they belong to
