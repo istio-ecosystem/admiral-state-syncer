@@ -4,9 +4,21 @@ Copyright © 2024 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
-	"fmt"
+	"github.com/istio-ecosystem/admiral-state-syncer/pkg/monitoring"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"log"
+	"net/http"
+	"sync"
+
+	"github.com/istio-ecosystem/admiral-state-syncer/pkg/server"
 
 	"github.com/spf13/cobra"
+)
+
+const (
+	portNumber  = "8080"
+	metricsPort = "9090"
+	metricsPath = "/metrics"
 )
 
 // syncCmd represents the sync command
@@ -15,20 +27,60 @@ var syncCmd = &cobra.Command{
 	Short: "Syncs state from kubernetes API Server to a registry platform",
 	Long:  `Syncs state from kubernetes API Server to a registry platform`,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("sync called")
+		wg := new(sync.WaitGroup)
+		wg.Add(1)
+		go func() {
+			Initialize(
+				initializeMonitoring,
+				startMetricsServer,
+				startNewServer,
+			)
+			wg.Done()
+		}()
+		wg.Wait()
+		log.Println("state syncer has been initialized")
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(syncCmd)
+}
 
-	// Here you will define your flags and configuration settings.
+func startMetricsServer() {
+	http.Handle(metricsPath, promhttp.Handler())
+	err := http.ListenAndServe(":"+metricsPort, nil)
+	if err != nil {
+		log.Fatalf("error serving http: %v", err)
+	}
+}
 
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// syncCmd.PersistentFlags().String("foo", "", "A help for foo")
+func startNewServer() {
+	newServer, err := server.NewServer()
+	if err != nil {
+		log.Fatalf("failed to instantiate a server: %v", err)
+	}
+	err = newServer.Listen(portNumber)
+	if err != nil {
+		log.Fatalf("failed to start server: %v", err)
+	}
+	log.Printf("started server on port %s", portNumber)
+}
 
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// syncCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+func initializeMonitoring() {
+	err := monitoring.InitializeMonitoring()
+	if err != nil {
+		log.Fatalf("failed to initialize monitoring: %v", err)
+	}
+}
+
+func Initialize(funcs ...func()) {
+	wg := new(sync.WaitGroup)
+	wg.Add(len(funcs))
+	for _, fn := range funcs {
+		go func() {
+			fn()
+			wg.Done()
+		}()
+	}
+	wg.Wait()
 }
