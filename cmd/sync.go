@@ -4,11 +4,13 @@ Copyright © 2024 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
-	"github.com/istio-ecosystem/admiral-state-syncer/pkg/monitoring"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"log"
 	"net/http"
 	"sync"
+
+	"github.com/istio-ecosystem/admiral-state-syncer/pkg/bootstrap"
+	"github.com/istio-ecosystem/admiral-state-syncer/pkg/monitoring"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/istio-ecosystem/admiral-state-syncer/pkg/server"
 
@@ -33,6 +35,7 @@ var syncCmd = &cobra.Command{
 			Initialize(
 				initializeMonitoring,
 				startMetricsServer,
+				startStateSyncer,
 				startNewServer,
 			)
 			wg.Done()
@@ -51,6 +54,17 @@ func startMetricsServer() {
 	err := http.ListenAndServe(":"+metricsPort, nil)
 	if err != nil {
 		log.Fatalf("error serving http: %v", err)
+	}
+}
+
+func startStateSyncer() {
+	stateSyncer, err := bootstrap.NewStateSyncer()
+	if err != nil {
+		log.Fatalf("failed to instantiate state syncer: %v", err)
+	}
+	err = stateSyncer.Start()
+	if err != nil {
+		log.Fatalf("error starting state syncer: %v", err)
 	}
 }
 
