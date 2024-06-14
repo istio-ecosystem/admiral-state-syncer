@@ -107,7 +107,6 @@ func (p *deploymentCache) GetDeploymentProcessStatus(deployment *k8sAppsV1.Deplo
 			return dceEnv.Status
 		}
 	}
-
 	return types.NotProcessed
 }
 
@@ -134,7 +133,6 @@ func (p *deploymentCache) UpdateDeploymentProcessStatus(deployment *k8sAppsV1.De
 			return nil
 		}
 	}
-
 	return fmt.Errorf(types.LogCacheFormat, "Update", "Deployment",
 		deployment.Name, deployment.Namespace, "", "nothing to update, deployment not found in cache")
 }
@@ -155,7 +153,6 @@ func (p *deploymentCache) UpdateDeploymentToClusterCache(key string, deployment 
 	p.mutex.Lock()
 
 	env := common.GetEnv(deployment)
-
 	dce := p.cache[key]
 	if dce == nil {
 		dce = &DeploymentClusterEntry{
@@ -195,13 +192,14 @@ func (p *deploymentCache) DeleteFromDeploymentClusterCache(key string, deploymen
 }
 
 func NewDeploymentController(stopCh <-chan struct{}, handler DeploymentHandler, config *rest.Config, resyncPeriod time.Duration, clientLoader client.ClientLoader) (*DeploymentController, error) {
-
-	deploymentController := DeploymentController{}
-	deploymentController.DeploymentHandler = handler
-	deploymentController.labelSet = common.GetLabelSet()
-
-	deploymentController.Cache = NewDeploymentCache()
-	var err error
+	var (
+		err                  error
+		deploymentController = DeploymentController{
+			DeploymentHandler: handler,
+			labelSet:          common.GetLabelSet(),
+			Cache:             NewDeploymentCache(),
+		}
+	)
 	deploymentController.K8sClient, err = clientLoader.LoadKubeClientFromConfig(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create deployment controller k8s client: %v", err)
@@ -213,9 +211,7 @@ func NewDeploymentController(stopCh <-chan struct{}, handler DeploymentHandler, 
 		resyncPeriod,
 		cache.Indexers{},
 	)
-
 	NewController(types.DeploymentControllerPrefix, config.Host, stopCh, &deploymentController, deploymentController.informer)
-
 	return &deploymentController, nil
 }
 
@@ -258,7 +254,7 @@ func HandleAddUpdateDeployment(ctx context.Context, obj interface{}, d *Deployme
 		} else {
 			ns, err := d.K8sClient.CoreV1().Namespaces().Get(ctx, deployment.Namespace, meta_v1.GetOptions{})
 			if err != nil {
-				log.Warnf("Failed to get namespace object for deployment with namespace %v, err: %v", deployment.Namespace, err)
+				log.Warnf("failed to get namespace object for deployment with namespace %v, err: %v", deployment.Namespace, err)
 			} else if (ns != nil && ns.Annotations[common.AdmiralIgnoreAnnotation] == "true") || deployment.Annotations[common.AdmiralIgnoreAnnotation] == "true" {
 				log.Infof("op=%s type=%v name=%v namespace=%s cluster=%s message=%s", "admiralIoIgnoreAnnotationCheck", common.DeploymentResourceType,
 					deployment.Name, deployment.Namespace, "", "Value=true")
@@ -318,13 +314,11 @@ func (d *DeploymentController) shouldIgnoreBasedOnLabels(ctx context.Context, de
 	if ns.Annotations[common.AdmiralIgnoreAnnotation] == "true" {
 		return true
 	}
-	return false //labels are fine, we should not ignore
+	return false
 }
 
 func (d *DeploymentController) GetDeploymentBySelectorInNamespace(ctx context.Context, serviceSelector map[string]string, namespace string) []k8sAppsV1.Deployment {
-
 	matchedDeployments, err := d.K8sClient.AppsV1().Deployments(namespace).List(ctx, meta_v1.ListOptions{})
-
 	if err != nil {
 		logrus.Errorf("Failed to list deployments in cluster, error: %v", err)
 		return nil
@@ -335,13 +329,11 @@ func (d *DeploymentController) GetDeploymentBySelectorInNamespace(ctx context.Co
 	}
 
 	filteredDeployments := make([]k8sAppsV1.Deployment, 0)
-
 	for _, deployment := range matchedDeployments.Items {
 		if common.IsServiceMatch(serviceSelector, deployment.Spec.Selector) {
 			filteredDeployments = append(filteredDeployments, deployment)
 		}
 	}
-
 	return filteredDeployments
 }
 
