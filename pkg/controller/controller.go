@@ -153,7 +153,7 @@ func NewController(name, clusterEndpoint string, stopCh <-chan struct{}, delegat
 				}
 				controller.delegator.LogValueOfAdmiralIoIgnore(newObj)
 				latestObj, isVersionChanged := checkIfResourceVersionHasIncreased(ctxLogger, ctx, oldObj, newObj, delegator)
-				txId, ctxLogger = updateTxId(ctx, newObj, latestObj, txId, ctxLogger, controller)
+				txId, ctxLogger = updateTxId(newObj, latestObj, txId, ctxLogger, controller)
 
 				if status == types.NotProcessed || isVersionChanged {
 					ctxLogger.Infof(ControllerLogFormat, taskAddEventToQueue, controller.queue.Len(),
@@ -208,7 +208,6 @@ func NewController(name, clusterEndpoint string, stopCh <-chan struct{}, delegat
 }
 
 func updateTxId(
-	ctx context.Context,
 	newObj, latestObj interface{},
 	txId string,
 	ctxLogger *logrus.Entry,
@@ -244,7 +243,6 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 		runtime.HandleError(fmt.Errorf("timed out waiting for caches to sync for controller=%v cluster=%v", c.name, c.cluster))
 		return
 	}
-
 	logrus.Infof("Informer caches synced for controller=%v cluster=%v, current keys=%v", c.name, c.cluster, c.informer.GetStore().ListKeys())
 	wait.Until(c.runWorker, 5*time.Second, stopCh)
 }
@@ -257,14 +255,11 @@ func (c *Controller) runWorker() {
 }
 
 func (c *Controller) processNextItem() bool {
-
 	item, quit := c.queue.Get()
 	if item == nil || quit {
 		return false
 	}
-
 	logrus.Infof(LogQueueFormat, taskGetEventFromQueue, c.name, c.cluster, c.queue.Len(), "current queue length")
-
 	defer c.queue.Done(item)
 	informerCache, ok := item.(InformerCacheObj)
 	if !ok {
@@ -289,7 +284,7 @@ func (c *Controller) processNextItem() bool {
 		err = c.processItem(item.(InformerCacheObj))
 	} else {
 		ctxLogger.Infof(ControllerLogFormat, taskRequeueAttempt, c.queue.Len(),
-			fmt.Sprintf("stale event will not be retried. newer event was already processed"))
+			"stale event will not be retried. newer event was already processed")
 		c.queue.Forget(item)
 		return true
 	}

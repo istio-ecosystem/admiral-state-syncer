@@ -17,7 +17,6 @@ import (
 
 	"sync"
 
-	log "github.com/sirupsen/logrus"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
@@ -178,15 +177,15 @@ func (p *deploymentCache) DeleteFromDeploymentClusterCache(key string, deploymen
 
 	if dce != nil {
 		if dce.Deployments[env] != nil && dce.Deployments[env].Deployment != nil && deployment.Name == dce.Deployments[env].Deployment.Name {
-			log.Infof("op=%s type=%v name=%v namespace=%s cluster=%s message=%s", "Delete", "Deployment",
+			logrus.Infof("op=%s type=%v name=%v namespace=%s cluster=%s message=%s", "Delete", "Deployment",
 				deployment.Name, deployment.Namespace, "", "ignoring deployment and deleting from cache")
 			delete(dce.Deployments, env)
 		} else {
-			log.Warnf("op=%s type=%v name=%v namespace=%s cluster=%s message=%s", "Get", "Deployment",
+			logrus.Warnf("op=%s type=%v name=%v namespace=%s cluster=%s message=%s", "Get", "Deployment",
 				deployment.Name, deployment.Namespace, "", "ignoring deployment delete as it doesn't match the one in cache")
 		}
 	} else {
-		log.Infof("op=%s type=%v name=%v namespace=%s cluster=%s message=%s", "Delete", "Deployment",
+		logrus.Infof("op=%s type=%v name=%v namespace=%s cluster=%s message=%s", "Delete", "Deployment",
 			deployment.Name, deployment.Namespace, "", "nothing to delete, deployment not found in cache")
 	}
 }
@@ -254,9 +253,9 @@ func HandleAddUpdateDeployment(ctx context.Context, obj interface{}, d *Deployme
 		} else {
 			ns, err := d.K8sClient.CoreV1().Namespaces().Get(ctx, deployment.Namespace, meta_v1.GetOptions{})
 			if err != nil {
-				log.Warnf("failed to get namespace object for deployment with namespace %v, err: %v", deployment.Namespace, err)
+				logrus.Warnf("failed to get namespace object for deployment with namespace %v, err: %v", deployment.Namespace, err)
 			} else if (ns != nil && ns.Annotations[common.AdmiralIgnoreAnnotation] == "true") || deployment.Annotations[common.AdmiralIgnoreAnnotation] == "true" {
-				log.Infof("op=%s type=%v name=%v namespace=%s cluster=%s message=%s", "admiralIoIgnoreAnnotationCheck", common.DeploymentResourceType,
+				logrus.Infof("op=%s type=%v name=%v namespace=%s cluster=%s message=%s", "admiralIoIgnoreAnnotationCheck", common.DeploymentResourceType,
 					deployment.Name, deployment.Namespace, "", "Value=true")
 			}
 			d.Cache.DeleteFromDeploymentClusterCache(key, deployment)
@@ -274,12 +273,12 @@ func (d *DeploymentController) Deleted(ctx context.Context, obj interface{}) err
 	if d.shouldIgnoreBasedOnLabels(ctx, deployment) {
 		ns, err := d.K8sClient.CoreV1().Namespaces().Get(ctx, deployment.Namespace, meta_v1.GetOptions{})
 		if err != nil {
-			log.Warnf("Failed to get namespace object for deployment with namespace %v, err: %v", deployment.Namespace, err)
+			logrus.Warnf("Failed to get namespace object for deployment with namespace %v, err: %v", deployment.Namespace, err)
 		} else if (ns != nil && ns.Annotations[common.AdmiralIgnoreAnnotation] == "true") || deployment.Annotations[common.AdmiralIgnoreAnnotation] == "true" {
-			log.Infof("op=%s type=%v name=%v namespace=%s cluster=%s message=%s", "admiralIoIgnoreAnnotationCheck", common.DeploymentResourceType,
+			logrus.Infof("op=%s type=%v name=%v namespace=%s cluster=%s message=%s", "admiralIoIgnoreAnnotationCheck", common.DeploymentResourceType,
 				deployment.Name, deployment.Namespace, "", "Value=true")
 		}
-		log.Infof("op=%s type=%v name=%v namespace=%s cluster=%s message=%s", "Delete", common.DeploymentResourceType,
+		logrus.Infof("op=%s type=%v name=%v namespace=%s cluster=%s message=%s", "Delete", common.DeploymentResourceType,
 			deployment.Name, deployment.Namespace, "", "ignoring deployment on basis of labels/annotation")
 		return nil
 	}
@@ -307,7 +306,7 @@ func (d *DeploymentController) shouldIgnoreBasedOnLabels(ctx context.Context, de
 
 	ns, err := d.K8sClient.CoreV1().Namespaces().Get(ctx, deployment.Namespace, meta_v1.GetOptions{})
 	if err != nil {
-		log.Warnf("Failed to get namespace object for deployment with namespace %v, err: %v", deployment.Namespace, err)
+		logrus.Warnf("Failed to get namespace object for deployment with namespace %v, err: %v", deployment.Namespace, err)
 		return false
 	}
 
@@ -345,9 +344,9 @@ func (d *DeploymentController) LogValueOfAdmiralIoIgnore(obj interface{}) {
 	if d.K8sClient != nil {
 		ns, err := d.K8sClient.CoreV1().Namespaces().Get(context.Background(), deployment.Namespace, meta_v1.GetOptions{})
 		if err != nil {
-			log.Warnf("Failed to get namespace object for deployment with namespace %v, err: %v", deployment.Namespace, err)
+			logrus.Warnf("Failed to get namespace object for deployment with namespace %v, err: %v", deployment.Namespace, err)
 		} else if (ns != nil && ns.Annotations[common.AdmiralIgnoreAnnotation] == "true") || deployment.Annotations[common.AdmiralIgnoreAnnotation] == "true" {
-			log.Infof("op=%s type=%v name=%v namespace=%s cluster=%s message=%s", "admiralIoIgnoreAnnotationCheck", common.DeploymentResourceType,
+			logrus.Infof("op=%s type=%v name=%v namespace=%s cluster=%s message=%s", "admiralIoIgnoreAnnotationCheck", common.DeploymentResourceType,
 				deployment.Name, deployment.Namespace, "", "Value=true")
 		}
 	}
