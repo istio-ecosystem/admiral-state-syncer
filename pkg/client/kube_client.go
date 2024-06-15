@@ -13,16 +13,16 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-type KubeClientLoader struct{}
+type kubeClientLoader struct{}
 
 // Singleton
-var kubeClientLoader = &KubeClientLoader{}
+var kubeClient = &kubeClientLoader{}
 
 func GetKubeClientLoader() ClientLoader {
-	return kubeClientLoader
+	return kubeClient
 }
 
-func (loader *KubeClientLoader) LoadAdmiralClientFromPath(kubeConfigPath string) (admiral.Interface, error) {
+func (loader *kubeClientLoader) LoadAdmiralClientFromPath(kubeConfigPath string) (admiral.Interface, error) {
 	config, err := getConfig(kubeConfigPath)
 	if err != nil || config == nil {
 		return nil, err
@@ -31,11 +31,11 @@ func (loader *KubeClientLoader) LoadAdmiralClientFromPath(kubeConfigPath string)
 	return loader.LoadAdmiralClientFromConfig(config)
 }
 
-func (*KubeClientLoader) LoadAdmiralClientFromConfig(config *rest.Config) (admiral.Interface, error) {
+func (*kubeClientLoader) LoadAdmiralClientFromConfig(config *rest.Config) (admiral.Interface, error) {
 	return admiral.NewForConfig(config)
 }
 
-func (loader *KubeClientLoader) LoadIstioClientFromPath(kubeConfigPath string) (istio.Interface, error) {
+func (loader *kubeClientLoader) LoadIstioClientFromPath(kubeConfigPath string) (istio.Interface, error) {
 	config, err := getConfig(kubeConfigPath)
 	if err != nil || config == nil {
 		return nil, err
@@ -44,11 +44,11 @@ func (loader *KubeClientLoader) LoadIstioClientFromPath(kubeConfigPath string) (
 	return loader.LoadIstioClientFromConfig(config)
 }
 
-func (loader *KubeClientLoader) LoadIstioClientFromConfig(config *rest.Config) (istio.Interface, error) {
+func (loader *kubeClientLoader) LoadIstioClientFromConfig(config *rest.Config) (istio.Interface, error) {
 	return istio.NewForConfig(config)
 }
 
-func (loader *KubeClientLoader) LoadArgoClientFromPath(kubeConfigPath string) (argo.Interface, error) {
+func (loader *kubeClientLoader) LoadArgoClientFromPath(kubeConfigPath string) (argo.Interface, error) {
 	config, err := getConfig(kubeConfigPath)
 	if err != nil || config == nil {
 		return nil, err
@@ -57,11 +57,11 @@ func (loader *KubeClientLoader) LoadArgoClientFromPath(kubeConfigPath string) (a
 	return loader.LoadArgoClientFromConfig(config)
 }
 
-func (loader *KubeClientLoader) LoadArgoClientFromConfig(config *rest.Config) (argo.Interface, error) {
+func (loader *kubeClientLoader) LoadArgoClientFromConfig(config *rest.Config) (argo.Interface, error) {
 	return argo.NewForConfig(config)
 }
 
-func (loader *KubeClientLoader) LoadKubeClientFromPath(kubeConfigPath string) (kubernetes.Interface, error) {
+func (loader *kubeClientLoader) LoadKubeClientFromPath(kubeConfigPath string) (kubernetes.Interface, error) {
 	config, err := getConfig(kubeConfigPath)
 	if err != nil || config == nil {
 		return nil, err
@@ -70,7 +70,7 @@ func (loader *KubeClientLoader) LoadKubeClientFromPath(kubeConfigPath string) (k
 	return loader.LoadKubeClientFromConfig(config)
 }
 
-func (loader *KubeClientLoader) LoadKubeClientFromConfig(config *rest.Config) (kubernetes.Interface, error) {
+func (loader *kubeClientLoader) LoadKubeClientFromConfig(config *rest.Config) (kubernetes.Interface, error) {
 	return kubernetes.NewForConfig(config)
 }
 

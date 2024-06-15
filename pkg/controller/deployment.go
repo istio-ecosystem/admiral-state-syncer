@@ -133,7 +133,7 @@ func (p *deploymentCache) UpdateDeploymentProcessStatus(deployment *k8sAppsV1.De
 		}
 	}
 	return fmt.Errorf(types.LogCacheFormat, "Update", "Deployment",
-		deployment.Name, deployment.Namespace, "", "nothing to update, deployment not found in cache")
+		deployment.Name, deployment.Namespace, "", "nothing to update, deployment not found in cache for env="+env)
 }
 
 func (p *deploymentCache) GetByIdentity(key string) map[string]*DeploymentItem {
@@ -142,9 +142,8 @@ func (p *deploymentCache) GetByIdentity(key string) map[string]*DeploymentItem {
 	dce := p.cache[key]
 	if dce != nil {
 		return dce.Deployments
-	} else {
-		return nil
 	}
+	return nil
 }
 
 func (p *deploymentCache) UpdateDeploymentToClusterCache(key string, deployment *k8sAppsV1.Deployment) {
