@@ -7,3 +7,7 @@ const (
 	NotProcessed               = "NotProcessed"
 	Processed                  = "Processed"
 )
+
+var (
+	LogCacheFormat = "op=%s type=%v name=%v namespace=%s cluster=%s message=%s"
+)
