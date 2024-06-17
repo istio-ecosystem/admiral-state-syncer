@@ -6,27 +6,23 @@ import (
 	"time"
 
 	"github.com/istio-ecosystem/admiral-state-syncer/pkg/client"
+	"github.com/istio-ecosystem/admiral-state-syncer/pkg/config"
 	"github.com/istio-ecosystem/admiral-state-syncer/pkg/types"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/util"
 	"github.com/sirupsen/logrus"
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	k8sAppsInformers "k8s.io/client-go/informers/apps/v1"
+	k8s "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
 	"sync"
 
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 )
-
-// DeploymentHandler interface contains the methods that are required
-type DeploymentHandler interface {
-	Added(ctx context.Context, obj *k8sAppsV1.Deployment) error
-	Deleted(ctx context.Context, obj *k8sAppsV1.Deployment) error
-}
 
 type DeploymentItem struct {
 	Deployment *k8sAppsV1.Deployment
@@ -39,17 +35,73 @@ type DeploymentClusterEntry struct {
 }
 
 type DeploymentController struct {
-	K8sClient         kubernetes.Interface
-	DeploymentHandler DeploymentHandler
-	Cache             *deploymentCache
-	informer          cache.SharedIndexInformer
-	labelSet          *common.LabelSet
+	K8sClient      k8s.Interface
+	Cache          *deploymentCache
+	informer       cache.SharedIndexInformer
+	labelSet       *common.LabelSet
+	remoteRegistry *RemoteRegistry
+	clusterID      string
 }
 
 type deploymentCache struct {
 	//map of dependencies key=identity value array of onboarded identities
 	cache map[string]*DeploymentClusterEntry
 	mutex *sync.Mutex
+}
+
+func NewDeploymentController(
+	stopCh <-chan struct{},
+	config *rest.Config,
+	resyncPeriod time.Duration,
+	remoteRegistry *RemoteRegistry,
+	clusterID string,
+	clientLoader client.ClientLoader) (*DeploymentController, error) {
+	var (
+		err                  error
+		deploymentController = DeploymentController{
+			labelSet:       common.GetLabelSet(),
+			Cache:          NewDeploymentCache(),
+			remoteRegistry: remoteRegistry,
+			clusterID:      clusterID,
+		}
+	)
+	deploymentController.K8sClient, err = clientLoader.LoadKubeClientFromConfig(config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create deployment controller k8s client: %v", err)
+	}
+
+	deploymentController.informer = k8sAppsInformers.NewDeploymentInformer(
+		deploymentController.K8sClient,
+		meta_v1.NamespaceAll,
+		resyncPeriod,
+		cache.Indexers{},
+	)
+	NewController(types.DeploymentControllerPrefix, config.Host, stopCh, &deploymentController, deploymentController.informer)
+	return &deploymentController, nil
+}
+
+func (d *DeploymentController) Added(ctx context.Context, obj interface{}) error {
+	return HandleAddUpdateDeployment(ctx, obj, d)
+}
+
+func (d *DeploymentController) Updated(ctx context.Context, obj interface{}, oldObj interface{}) error {
+	return HandleAddUpdateDeployment(ctx, obj, d)
+}
+
+func (d *DeploymentController) GetProcessItemStatus(obj interface{}) (string, error) {
+	deployment, ok := obj.(*k8sAppsV1.Deployment)
+	if !ok {
+		return types.NotProcessed, fmt.Errorf("type assertion failed, %v is not of type *v1.Deployment", obj)
+	}
+	return d.Cache.GetDeploymentProcessStatus(deployment), nil
+}
+
+func (d *DeploymentController) UpdateProcessItemStatus(obj interface{}, status string) error {
+	deployment, ok := obj.(*k8sAppsV1.Deployment)
+	if !ok {
+		return fmt.Errorf("type assertion failed, %v is not of type *v1.Deployment", obj)
+	}
+	return d.Cache.UpdateDeploymentProcessStatus(deployment, status)
 }
 
 func NewDeploymentCache() *deploymentCache {
@@ -189,54 +241,6 @@ func (p *deploymentCache) DeleteFromDeploymentClusterCache(key string, deploymen
 	}
 }
 
-func NewDeploymentController(stopCh <-chan struct{}, handler DeploymentHandler, config *rest.Config, resyncPeriod time.Duration, clientLoader client.ClientLoader) (*DeploymentController, error) {
-	var (
-		err                  error
-		deploymentController = DeploymentController{
-			DeploymentHandler: handler,
-			labelSet:          common.GetLabelSet(),
-			Cache:             NewDeploymentCache(),
-		}
-	)
-	deploymentController.K8sClient, err = clientLoader.LoadKubeClientFromConfig(config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create deployment controller k8s client: %v", err)
-	}
-
-	deploymentController.informer = k8sAppsInformers.NewDeploymentInformer(
-		deploymentController.K8sClient,
-		meta_v1.NamespaceAll,
-		resyncPeriod,
-		cache.Indexers{},
-	)
-	NewController(types.DeploymentControllerPrefix, config.Host, stopCh, &deploymentController, deploymentController.informer)
-	return &deploymentController, nil
-}
-
-func (d *DeploymentController) Added(ctx context.Context, obj interface{}) error {
-	return HandleAddUpdateDeployment(ctx, obj, d)
-}
-
-func (d *DeploymentController) Updated(ctx context.Context, obj interface{}, oldObj interface{}) error {
-	return HandleAddUpdateDeployment(ctx, obj, d)
-}
-
-func (d *DeploymentController) GetProcessItemStatus(obj interface{}) (string, error) {
-	deployment, ok := obj.(*k8sAppsV1.Deployment)
-	if !ok {
-		return types.NotProcessed, fmt.Errorf("type assertion failed, %v is not of type *v1.Deployment", obj)
-	}
-	return d.Cache.GetDeploymentProcessStatus(deployment), nil
-}
-
-func (d *DeploymentController) UpdateProcessItemStatus(obj interface{}, status string) error {
-	deployment, ok := obj.(*k8sAppsV1.Deployment)
-	if !ok {
-		return fmt.Errorf("type assertion failed, %v is not of type *v1.Deployment", obj)
-	}
-	return d.Cache.UpdateDeploymentProcessStatus(deployment, status)
-}
-
 func HandleAddUpdateDeployment(ctx context.Context, obj interface{}, d *DeploymentController) error {
 	deployment, ok := obj.(*k8sAppsV1.Deployment)
 	if !ok {
@@ -248,7 +252,7 @@ func HandleAddUpdateDeployment(ctx context.Context, obj interface{}, d *Deployme
 		if !d.shouldIgnoreBasedOnLabels(ctx, deployment) {
 			d.Cache.UpdateDeploymentToClusterCache(key, deployment)
 			d.Cache.UpdateDeploymentToClusterCache(GetDeploymentOriginalIdentifier(deployment), deployment)
-			return d.DeploymentHandler.Added(ctx, deployment)
+			return HandleEventForDeployment(ctx, types.Add, deployment, d.remoteRegistry, d.clusterID)
 		} else {
 			ns, err := d.K8sClient.CoreV1().Namespaces().Get(ctx, deployment.Namespace, meta_v1.GetOptions{})
 			if err != nil {
@@ -282,7 +286,7 @@ func (d *DeploymentController) Deleted(ctx context.Context, obj interface{}) err
 		return nil
 	}
 	key := d.Cache.getKey(deployment)
-	err := d.DeploymentHandler.Deleted(ctx, deployment)
+	err := HandleEventForDeployment(ctx, types.Delete, deployment, d.remoteRegistry, d.clusterID)
 	if err == nil && len(key) > 0 {
 		d.Cache.DeleteFromDeploymentClusterCache(key, deployment)
 		d.Cache.DeleteFromDeploymentClusterCache(GetDeploymentOriginalIdentifier(deployment), deployment)
@@ -360,4 +364,53 @@ func (d *DeploymentController) Get(ctx context.Context, isRetry bool, obj interf
 		return d.K8sClient.AppsV1().Deployments(deployment.Namespace).Get(ctx, deployment.Name, meta_v1.GetOptions{})
 	}
 	return nil, fmt.Errorf("kubernetes client is not initialized, txId=%s", ctx.Value("txId"))
+}
+
+// helper function to handle add and delete for DeploymentHandler
+func HandleEventForDeployment(ctx context.Context, event types.EventType, obj *k8sAppsV1.Deployment,
+	remoteRegistry *RemoteRegistry, clusterName string) error {
+
+	log.Infof(types.LogFormat, event, common.DeploymentResourceType, obj.Name, clusterName, common.ReceivedStatus)
+	globalIdentifier := common.GetDeploymentGlobalIdentifier(obj)
+	log.Infof(types.LogFormat, event, common.DeploymentResourceType, obj.Name, clusterName, "globalIdentifier is "+globalIdentifier)
+	originalIdentifier := GetDeploymentOriginalIdentifier(obj)
+	log.Infof(types.LogFormat, event, common.DeploymentResourceType, obj.Name, clusterName, "originalIdentifier is "+originalIdentifier)
+
+	if len(globalIdentifier) == 0 {
+		log.Infof(types.LogFormat, event, common.DeploymentResourceType, obj.Name, clusterName, "Skipped as '"+common.GetWorkloadIdentifier()+" was not found', namespace="+obj.Namespace)
+		return nil
+	}
+
+	env := common.GetEnv(obj)
+
+	ctx = context.WithValue(ctx, common.ClusterName, clusterName)
+	ctx = context.WithValue(ctx, common.EventResourceType, common.Deployment)
+
+	if remoteRegistry.AdmiralCache != nil {
+		if remoteRegistry.AdmiralCache.IdentityClusterCache != nil {
+			remoteRegistry.AdmiralCache.IdentityClusterCache.Put(globalIdentifier, clusterName, clusterName)
+			remoteRegistry.AdmiralCache.IdentityClusterCache.Put(originalIdentifier, clusterName, clusterName)
+			log.Infof(types.LogFormat, event, common.DeploymentResourceType, obj.Name, clusterName, "for "+globalIdentifier+" got "+remoteRegistry.AdmiralCache.IdentityClusterCache.Get(globalIdentifier).Get(clusterName))
+			log.Infof(types.LogFormat, event, common.DeploymentResourceType, obj.Name, clusterName, "for "+originalIdentifier+" got "+remoteRegistry.AdmiralCache.IdentityClusterCache.Get(originalIdentifier).Get(clusterName))
+		}
+		if config.EnableSWAwareNSCaches() {
+			if remoteRegistry.AdmiralCache.IdentityClusterNamespaceCache != nil {
+				remoteRegistry.AdmiralCache.IdentityClusterNamespaceCache.Put(globalIdentifier, clusterName, obj.Namespace, obj.Namespace)
+				remoteRegistry.AdmiralCache.IdentityClusterNamespaceCache.Put(originalIdentifier, clusterName, obj.Namespace, obj.Namespace)
+				log.Infof(types.LogFormat, event, common.DeploymentResourceType, obj.Name, clusterName, "for "+globalIdentifier+" got "+remoteRegistry.AdmiralCache.IdentityClusterNamespaceCache.Get(globalIdentifier).Get(clusterName).Get(obj.Namespace))
+				log.Infof(types.LogFormat, event, common.DeploymentResourceType, obj.Name, clusterName, "for "+originalIdentifier+" got "+remoteRegistry.AdmiralCache.IdentityClusterNamespaceCache.Get(originalIdentifier).Get(clusterName).Get(obj.Namespace))
+			}
+			if remoteRegistry.AdmiralCache.PartitionIdentityCache != nil && len(GetDeploymentIdentityPartition(obj)) > 0 {
+				remoteRegistry.AdmiralCache.PartitionIdentityCache.Put(globalIdentifier, originalIdentifier)
+				log.Infof(types.LogFormat, event, common.DeploymentResourceType, obj.Name, clusterName, "PartitionIdentityCachePut "+globalIdentifier+" for "+originalIdentifier)
+			}
+		}
+	}
+
+	// Use the same function as added deployment function to update and put new service entry in place to replace old one
+	log.Infof("call modify se for env=%s", env)
+	if config.EnableSWAwareNSCaches() && globalIdentifier != originalIdentifier {
+		log.Infof("call modify se for env=%s", env)
+	}
+	return nil
 }

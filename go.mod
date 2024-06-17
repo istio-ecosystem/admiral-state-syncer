@@ -5,7 +5,7 @@ go 1.22.3
 require (
 	github.com/argoproj/argo-rollouts v1.7.0
 	github.com/google/uuid v1.6.0
-	github.com/istio-ecosystem/admiral v1.3.0
+	github.com/istio-ecosystem/admiral v1.4.0
 	github.com/matryer/resync v0.0.0-20161211202428-d39c09a11215
 	github.com/prometheus/client_golang v1.19.1
 	github.com/sirupsen/logrus v1.9.3

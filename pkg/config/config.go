@@ -22,3 +22,15 @@ func GetPartitionIdentifier() string {
 	defer wrapper.RUnlock()
 	return wrapper.params.LabelSet.IdentityPartitionKey
 }
+
+func GetLabelSet() *LabelSet {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	return wrapper.params.LabelSet
+}
+
+func GetEnvKey() string {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	return wrapper.params.LabelSet.EnvKey
+}
